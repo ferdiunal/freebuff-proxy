@@ -1,0 +1,147 @@
+name: Release proxy binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_REPOSITORY: ferdiunal/freebuff-go
+  TARGET_REPOSITORY: ferdiunal/freebuff-proxy
+
+jobs:
+  prepare:
+    name: Prepare release tag
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.tag.outputs.release_tag }}
+      release_ref: ${{ steps.tag.outputs.release_ref }}
+
+    steps:
+      - name: Resolve release tag
+        id: tag
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          case "$RELEASE_TAG" in
+            v*) ;;
+            *) echo "Release tag must start with v" >&2; exit 1 ;;
+          esac
+          printf 'release_tag=%s\n' "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          printf 'release_ref=refs/tags/%s\n' "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Test and vet
+    runs-on: ubuntu-latest
+    needs: prepare
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          ref: ${{ needs.prepare.outputs.release_ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Vet
+        run: go vet ./...
+
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - test
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            extension: .exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.SOURCE_REPOSITORY }}
+          ref: ${{ needs.prepare.outputs.release_ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          EXTENSION: ${{ matrix.extension }}
+        run: |
+          mkdir -p dist
+          asset="freebuff-proxy-${GOOS}-${GOARCH}"
+          binary="${asset}${EXTENSION}"
+          go build -trimpath -ldflags="-s -w" -o "dist/${binary}" ./cmd/freebuff-proxy
+          tar -C dist -czf "dist/${asset}.tar.gz" "${binary}"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: freebuff-proxy-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Publish proxy release
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          pattern: freebuff-proxy-*
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.FREEBUFF_PROXY_RELEASE_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/*.tar.gz \
+            --repo "$TARGET_REPOSITORY" \
+            --target "$RELEASE_TAG" \
+            --title "$RELEASE_TAG" \
+            --notes "Automated freebuff-proxy release from freebuff-go $RELEASE_TAG"

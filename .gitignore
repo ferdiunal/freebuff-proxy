@@ -1,0 +1,8 @@
+/freebuff-proxy
+/bin/
+/dist/
+/credentials.json
+*.credentials.json
+*.log
+.env
+.DS_Store
