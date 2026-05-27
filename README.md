@@ -1,20 +1,20 @@
 # freebuff-proxy
 
-`freebuff-proxy`, Freebuff/Codebuff oturum altyapısını yerel bir OpenAI ve Anthropic uyumlu HTTP yüzeyi arkasına alan küçük bir Go servisidir. Amaç; CLI ile Freebuff hesabına giriş yapmak, `credentials.json` içindeki kimlik bilgisini güvenli biçimde kullanmak, oturumu hazır tutmak ve istemcilere `/v1/models`, `/v1/chat/completions`, `/v1/messages` ve `/v1/messages/count_tokens` biçiminde uyumlu endpointler sunmaktır.
+`freebuff-proxy` is a small Go service that exposes a local OpenAI- and Anthropic-compatible HTTP surface in front of the Freebuff/Codebuff session infrastructure. It lets you sign in to a Freebuff account via CLI, securely use the credential stored in `credentials.json`, keep the session alive, and serve compatible endpoints at `/v1/models`, `/v1/chat/completions`, `/v1/messages`, and `/v1/messages/count_tokens`.
 
-Chat endpointleri OpenAI veya Anthropic biçimli istek kabul eder, Freebuff oturumunu hazırlar, Codebuff CLI gibi önce `/api/v1/agent-runs` üzerinde agent run başlatır, `codebuff_metadata` ile doğrulanmış upstream chat rotasına istek gönderir ve yanıtı istemci sözleşmesine göre `chat.completion`, OpenAI SSE chunk veya Anthropic Messages/SSE formatına dönüştürür.
+Chat endpoints accept OpenAI or Anthropic-shaped requests, prepare the Freebuff session, start an agent run via `/api/v1/agent-runs` (like the Codebuff CLI flow), send the request to the verified upstream chat route with `codebuff_metadata`, and convert the response into `chat.completion`, OpenAI SSE chunk, or Anthropic Messages/SSE format according to the client contract.
 
-## Kurulum
+> 🇹🇷 Türkçe doküman için bkz. [README.TR.md](README.TR.md)
 
-Gereksinimler:
+## Requirements
 
-- Go 1.25 veya üzeri
-- Freebuff/Codebuff hesabı
-- Docker ile container imajı üretilecekse Docker CLI ve çalışan Docker daemon
+- Go 1.25+
+- A Freebuff/Codebuff account
+- Docker CLI and a running daemon (only if you want to build a container image)
 
-HTTP sunucu katmanı Fiber v3 ile çalışır. Yapılandırma yüklenirken proje kökündeki `.env` dosyası `github.com/joho/godotenv` ile otomatik okunur; process env değerleri `.env` içindeki değerlerden önceliklidir.
+The HTTP layer runs on Fiber v3. On startup the project root `.env` file is loaded automatically via `github.com/joho/godotenv`; process env values take precedence over `.env` entries.
 
-Kaynak koddan doğrulama ve derleme:
+## Build from source
 
 ```bash
 go test ./...
@@ -22,7 +22,7 @@ go vet ./...
 go build -o bin/freebuff-proxy ./cmd/freebuff-proxy
 ```
 
-Makefile hedefleri:
+Makefile targets:
 
 ```bash
 make test
@@ -36,23 +36,23 @@ make smoke-anthropic
 make docker
 ```
 
-`make build`, ikili dosyayı `bin/freebuff-proxy` olarak üretir. `make run-bin`, önce bu binary'yi üretip ardından `./bin/freebuff-proxy serve` çalıştırır. `make doctor`, port `1455` üzerinde çalışan süreci ve stale root binary izlerini gösterir. `make smoke-openai` ve `make smoke-anthropic`, çalışan yerel proxy'ye örnek istek gönderir. Doğrudan kurulum istenirse proje kökünde şu komut kullanılabilir:
+`make build` produces the binary at `bin/freebuff-proxy`. `make run-bin` builds then runs `./bin/freebuff-proxy serve`. `make doctor` inspects the process on port `1455` and stale root binary artifacts. `make smoke-openai` and `make smoke-anthropic` send sample requests to the running local proxy. To install directly:
 
 ```bash
 go install ./cmd/freebuff-proxy
 ```
 
-## Ortam değişkenleri
+## Environment variables
 
-| Değişken | Varsayılan | Açıklama |
+| Variable | Default | Description |
 | --- | --- | --- |
-| `FREEBUFF_PROXY_ADDR` | `127.0.0.1:1455` | HTTP proxy dinleme adresi. Container içinde dışarı port açmak için genellikle `0.0.0.0:1455` kullanılır. |
-| `FREEBUFF_API_BASE_URL` | `https://www.codebuff.com` | Freebuff/Codebuff API taban adresi. Login, logout ve session endpointleri bu adrese göre çağrılır. |
-| `FREEBUFF_MODEL` | `deepseek/deepseek-v4-pro` | `/v1/models` çıktısında listelenen ve örnek isteklerde kullanılan model adı. |
-| `FREEBUFF_PROXY_API_KEY` | boş | Boş değilse proxy, tüm endpointler için `Authorization: Bearer <değer>` veya `x-api-key: <değer>` kontrolü yapar. OpenAI uyumlu istemcilerde `api_key`, Anthropic/Claude Code tarafında `ANTHROPIC_AUTH_TOKEN` veya `ANTHROPIC_API_KEY` olarak kullanılabilir. |
-| `FREEBUFF_CREDENTIALS_PATH` | `$HOME/.config/manicode/credentials.json` | Login sonrası yazılan ve serve sırasında okunan kimlik dosyası yolu. |
+| `FREEBUFF_PROXY_ADDR` | `127.0.0.1:1455` | HTTP listen address. Use `0.0.0.0:1455` to expose the port inside a container. |
+| `FREEBUFF_API_BASE_URL` | `https://www.codebuff.com` | Freebuff/Codebuff API base URL for login, logout, and session endpoints. |
+| `FREEBUFF_MODEL` | `deepseek/deepseek-v4-pro` | Model name listed in `/v1/models` and used by sample requests. |
+| `FREEBUFF_PROXY_API_KEY` | *(empty)* | When set, the proxy requires `Authorization: Bearer <value>` or `x-api-key: <value>` on every endpoint. Use as `api_key` for OpenAI-compatible clients or `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` on the Anthropic/Claude Code side. |
+| `FREEBUFF_CREDENTIALS_PATH` | `$HOME/.config/manicode/credentials.json` | Path to the credential file written after login and read during `serve`. |
 
-Örnek `.env` dosyası:
+Example `.env`:
 
 ```dotenv
 FREEBUFF_PROXY_ADDR=127.0.0.1:1455
@@ -62,19 +62,17 @@ FREEBUFF_PROXY_API_KEY=local-proxy-key
 FREEBUFF_CREDENTIALS_PATH=$HOME/.config/manicode/credentials.json
 ```
 
-`.env` dosyasında gerçek production secret değerlerini paylaşmayın; CI veya container ortamında mümkünse secret manager ya da runtime env kullanın.
+Do not commit real production secrets to `.env`; prefer a secret manager or runtime env in CI/container environments.
 
-## Sıfırdan hızlı başlangıç
+## Quick start
 
-Bu akış temiz bir checkout'ta yerel proxy'yi ayağa kaldırır, Freebuff hesabıyla login yapar ve OpenAI/Anthropic uyumlu endpointleri doğrular.
-
-1. Binary'yi derleyin:
+1. Build the binary:
 
    ```bash
    make build
    ```
 
-2. Yerel ayarları export edin. Geliştirme sırasında aynı değerleri `.env` dosyasına da yazabilirsiniz:
+2. Export local settings (or write them to `.env`):
 
    ```bash
    export FREEBUFF_PROXY_ADDR=127.0.0.1:1455
@@ -84,85 +82,83 @@ Bu akış temiz bir checkout'ta yerel proxy'yi ayağa kaldırır, Freebuff hesab
    export FREEBUFF_CREDENTIALS_PATH="$HOME/.config/manicode/credentials.json"
    ```
 
-3. Freebuff/Codebuff hesabıyla giriş yapın:
+3. Sign in:
 
    ```bash
    ./bin/freebuff-proxy login
    ```
 
-   Komut bir giriş bağlantısı yazdırır. Bağlantıyı tarayıcıda açıp hesabınızla oturum açın; CLI doğrulama tamamlanınca `FREEBUFF_CREDENTIALS_PATH` konumuna credential yazar.
+   The command prints a login link. Open it in your browser, authenticate, and the CLI writes a credential file to `FREEBUFF_CREDENTIALS_PATH` once verification completes.
 
-4. Proxy'yi çalıştırın:
+4. Start the proxy:
 
    ```bash
    ./bin/freebuff-proxy serve
    ```
 
-   Ayrı bir terminalde hızlı doğrulama çalıştırın:
+   In another terminal, run quick checks:
 
    ```bash
    make smoke-openai
    make smoke-anthropic
    ```
 
-5. İşiniz bitince çıkış yapın:
+5. Sign out when done:
 
    ```bash
    ./bin/freebuff-proxy logout
    ```
 
-   Logout upstream oturumu kapatır ve yerel credential dosyasını temizler. Sadece yerel proxy sürecini kapatmak istiyorsanız `Ctrl-C` yeterlidir.
+   Logout tears down the upstream session and removes the local credential file. To stop the proxy process only, press `Ctrl-C`.
 
 ## Login flow
 
-1. CLI login başlatılır:
-
+1. Start login:
    ```bash
    freebuff-proxy login
    ```
+2. The command prints a Freebuff login URL.
+3. Open the URL in a browser and authenticate.
+4. The CLI polls the status endpoint until verification completes.
+5. On success a credential is written to `$HOME/.config/manicode/credentials.json` by default.
+6. The file is created atomically with `0600` permissions.
 
-2. Komut, Freebuff giriş bağlantısını terminale yazdırır.
-3. Kullanıcı bağlantıyı tarayıcıda açıp hesabıyla oturum açar.
-4. CLI, doğrulama durumu tamamlanana kadar status endpointini poll eder.
-5. Başarılı girişte varsayılan olarak `$HOME/.config/manicode/credentials.json` dosyasına kimlik bilgisi yazılır.
-6. Dosya atomik olarak oluşturulur ve `0600` izinleriyle korunur.
-
-Özel credential yolu kullanmak için:
+Custom credential path:
 
 ```bash
 FREEBUFF_CREDENTIALS_PATH=/secure/path/credentials.json freebuff-proxy login
 ```
 
-Çıkış yapmak için:
+Sign out:
 
 ```bash
 freebuff-proxy logout
 ```
 
-Logout, kayıtlı metadata ile upstream logout çağrısı yapar ve başarılıysa yerel credential dosyasını temizler.
+Logout calls the upstream logout endpoint with stored metadata and removes the local credential file on success.
 
 ## Serve command
 
-Yerel servis başlatma:
+Start the local service:
 
 ```bash
 make build
 ./bin/freebuff-proxy serve
 ```
 
-veya tek Makefile hedefiyle:
+Or with a single Makefile target:
 
 ```bash
 make run-bin
 ```
 
-Geliştirme sırasında kaynak koddan doğrudan çalıştırmak için:
+Run from source during development:
 
 ```bash
 make run
 ```
 
-Varsayılan adres `127.0.0.1:1455` olduğu için servis sadece yerel makineden erişilebilir. Farklı adres veya proxy API key ile çalıştırmak için:
+The default address is `127.0.0.1:1455` so the service is only reachable from localhost. To use a different address or require an API key:
 
 ```bash
 FREEBUFF_PROXY_ADDR=0.0.0.0:1455 \
@@ -170,7 +166,7 @@ FREEBUFF_PROXY_API_KEY=local-proxy-key \
 ./bin/freebuff-proxy serve
 ```
 
-Repo kökünde eski `./freebuff-proxy` binary'si varsa `./freebuff-proxy serve` güncel `bin/freebuff-proxy` yerine stale artifact çalıştırabilir. Bu durumda `upstream_chat_route_not_verified` gibi eski hata kodları görülebilir. Teşhis için:
+If a stale `./freebuff-proxy` binary exists in the repo root it may be executed instead of the current `bin/freebuff-proxy`, causing errors like `upstream_chat_route_not_verified`. Diagnose with:
 
 ```bash
 make doctor
@@ -178,23 +174,23 @@ strings ./freebuff-proxy | grep -F upstream_chat_route_not_verified
 strings ./bin/freebuff-proxy | grep -F upstream_chat_route_not_verified
 ```
 
-Sağlık ve model endpointleri:
+Health and model endpoints:
 
 ```bash
 curl http://127.0.0.1:1455/healthz
-curl -H 'Authorization: Bearer local-proxy-key' http://127.0.0.1:1455/v1/models
+curl -H 'Authorization: Bearer ***' http://127.0.0.1:1455/v1/models
 ```
 
-Chat endpointi OpenAI biçimli istek kabul eder, Freebuff oturumunu hazırlar, Codebuff CLI akışındaki gibi agent run başlatır ve chat isteğine `run_id`, `client_id`, `cost_mode` ile `freebuff_instance_id` metadata alanlarını ekleyerek upstream rotaya iletir. `deepseek-v4-pro` ve `deepseek-v4-flash` gibi kısa model alias'ları upstream isteğinde kanonik `deepseek/...` adına çevrilir:
+The chat endpoint accepts OpenAI-shaped requests, prepares the Freebuff session, starts an agent run (like the Codebuff CLI flow), and forwards the request to the upstream route with `run_id`, `client_id`, `cost_mode`, and `freebuff_instance_id` metadata fields. Short model aliases like `deepseek-v4-pro` and `deepseek-v4-flash` are resolved to their canonical `deepseek/...` form in the upstream request:
 
 ```bash
 curl -X POST http://127.0.0.1:1455/v1/chat/completions \
-  -H 'Authorization: Bearer local-proxy-key' \
+  -H 'Authorization: Bearer ***' \
   -H 'Content-Type: application/json' \
-  -d '{"model":"deepseek/deepseek-v4-pro","messages":[{"role":"user","content":"Merhaba"}]}'
+  -d '{"model":"deepseek/deepseek-v4-pro","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-Başarılı çağrı `object: "chat.completion"` ve `choices[0].message.content` alanında assistant yanıtı döndürür:
+A successful call returns `object: "chat.completion"` with the assistant reply in `choices[0].message.content`:
 
 ```json
 {
@@ -205,7 +201,7 @@ Başarılı çağrı `object: "chat.completion"` ve `choices[0].message.content`
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "Merhaba!"
+        "content": "Hello!"
       },
       "finish_reason": "stop"
     }
@@ -213,26 +209,18 @@ Başarılı çağrı `object: "chat.completion"` ve `choices[0].message.content`
 }
 ```
 
-Stream çağrısı için:
+Streaming:
 
 ```bash
 curl -N -X POST http://127.0.0.1:1455/v1/chat/completions \
-  -H 'Authorization: Bearer local-proxy-key' \
+  -H 'Authorization: Bearer ***' \
   -H 'Content-Type: application/json' \
-  -d '{"model":"deepseek/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"Merhaba"}]}'
+  -d '{"model":"deepseek/deepseek-v4-pro","stream":true,"messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-Stream çağrısı `Content-Type: text/event-stream` ile `data: {...}` chunk'ları ve en sonda `data: [DONE]` döndürür:
+Stream responses are delivered as `Content-Type: text/event-stream` with `data: {...}` chunks terminated by `data: [DONE]`.
 
-```text
-data: {"object":"chat.completion.chunk","model":"deepseek/deepseek-v4-pro","choices":[{"index":0,"delta":{"role":"assistant","content":"Mer"}}]}
-
-data: {"object":"chat.completion.chunk","model":"deepseek/deepseek-v4-pro","choices":[{"index":0,"delta":{"content":"haba!"}}]}
-
-data: [DONE]
-```
-
-Makefile smoke hedefleri çalışan proxy'ye hızlı doğrulama isteği atar:
+Smoke targets for quick verification:
 
 ```bash
 make smoke-openai
@@ -244,9 +232,7 @@ SMOKE_MODEL=deepseek/deepseek-v4-pro \
 make smoke-anthropic
 ```
 
-## OpenAI-compatible client örneği
-
-Python OpenAI istemcisi ile proxy adresini `base_url` olarak verin. `FREEBUFF_PROXY_API_KEY` ayarlıysa aynı değeri `api_key` olarak kullanın; ayarlı değilse istemcinin zorunlu alanını doldurmak için yerel, anlamsız bir değer verilebilir.
+## OpenAI-compatible client example
 
 ```python
 from openai import OpenAI
@@ -258,58 +244,56 @@ client = OpenAI(
 
 response = client.chat.completions.create(
     model="deepseek/deepseek-v4-pro",
-    messages=[{"role": "user", "content": "Merhaba"}],
+    messages=[{"role": "user", "content": "Hello"}],
 )
 
 print(response.choices[0].message.content)
 ```
 
-Bu çağrı, yapılandırılmış Freebuff oturumu aktifse OpenAI uyumlu başarı yanıtı döndürür; upstream veya oturum hataları OpenAI uyumlu hata zarfına dönüştürülür.
+## Codex and OpenAI-compatible usage
 
-## Codex ve OpenAI-compatible kullanım
-
-OpenAI Chat Completions uyumlu istemciler için `base_url` değerini `http://127.0.0.1:1455/v1`, API key değerini de `FREEBUFF_PROXY_API_KEY` olarak verin.
+For OpenAI Chat Completions compatible clients set `base_url` to `http://127.0.0.1:1455/v1` and `api_key` to your `FREEBUFF_PROXY_API_KEY` value.
 
 ```bash
 export OPENAI_BASE_URL=http://127.0.0.1:1455/v1
 export OPENAI_API_KEY=local-proxy-key
 ```
 
-Sonra Chat Completions kullanan istemciler `model=deepseek/deepseek-v4-pro` ile proxy üzerinden çalışabilir.
+Chat Completions clients can then use `model=deepseek/deepseek-v4-pro` through the proxy.
 
-OpenAI Codex CLI için durum farklıdır: güncel Codex CLI akışları OpenAI Responses API (`/v1/responses`) kullanabilir. Bu proxy şu anda `/v1/responses` endpointi sunmadığı için Codex CLI'yi doğrudan tam uyumlu hedef olarak belgelemiyoruz. Codex tarafında Chat Completions uyumlu veya custom provider destekleyen bir sürüm/konfigürasyon kullanıyorsanız yukarıdaki `OPENAI_BASE_URL` ve `OPENAI_API_KEY` değerleriyle deneyebilirsiniz; Responses API isteyen sürümler için ayrıca `/v1/responses` desteği eklenmelidir.
+> **Note:** The current OpenAI Codex CLI may use the Responses API (`/v1/responses`). This proxy does not yet serve that endpoint. If your Codex version supports Chat Completions or a custom provider, the `OPENAI_BASE_URL` / `OPENAI_API_KEY` settings above should work; Responses API support needs to be added separately.
 
-## Anthropic ve Claude Code örneği
+## Anthropic and Claude Code example
 
-Anthropic Messages uyumlu yüzeyler:
+Anthropic Messages-compatible surfaces:
 
 - `POST /v1/messages`
 - `POST /v1/messages/count_tokens`
 - `GET /v1/models`
 
-`/v1/messages`, string veya `type: "text"` content block içeren Anthropic mesajlarını OpenAI uyumlu chat isteğine çevirir. Yanıt non-stream çağrıda Anthropic `message` nesnesi, stream çağrıda `message_start`, `content_block_delta`, `message_delta` ve `message_stop` SSE eventleri olarak döner. Tool tanımları OpenAI function tool biçimine best-effort çevrilir; mevcut upstream chat servisi metin yanıtı döndürdüğü için Anthropic `tool_use` response block üretimi bu sürümde yoktur.
+`/v1/messages` converts Anthropic messages (string or `type: "text"` content blocks) to OpenAI-compatible chat requests. The response is returned as an Anthropic `message` object (non-stream) or `message_start`, `content_block_delta`, `message_delta`, and `message_stop` SSE events (stream). Tool definitions are best-effort converted to OpenAI function tool format; the current upstream chat service returns text responses so Anthropic `tool_use` response blocks are not produced in this version.
 
-Basit Anthropic curl:
+Simple Anthropic curl:
 
 ```bash
 curl -X POST http://127.0.0.1:1455/v1/messages \
   -H 'x-api-key: local-proxy-key' \
   -H 'anthropic-version: 2023-06-01' \
   -H 'Content-Type: application/json' \
-  -d '{"model":"deepseek/deepseek-v4-pro","max_tokens":256,"messages":[{"role":"user","content":"Merhaba"}]}'
+  -d '{"model":"deepseek/deepseek-v4-pro","max_tokens":256,"messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-Stream örneği:
+Stream example:
 
 ```bash
 curl -N -X POST http://127.0.0.1:1455/v1/messages \
   -H 'x-api-key: local-proxy-key' \
   -H 'anthropic-version: 2023-06-01' \
   -H 'Content-Type: application/json' \
-  -d '{"model":"deepseek/deepseek-v4-pro","max_tokens":256,"stream":true,"messages":[{"role":"user","content":"Merhaba"}]}'
+  -d '{"model":"deepseek/deepseek-v4-pro","max_tokens":256,"stream":true,"messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-Claude Code için yerel gateway ayarı:
+Claude Code local gateway setup:
 
 ```bash
 export ANTHROPIC_BASE_URL=http://127.0.0.1:1455
@@ -319,19 +303,19 @@ export ANTHROPIC_SMALL_FAST_MODEL=deepseek/deepseek-v4-flash
 export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY=1
 ```
 
-Ardından Claude Code'u aynı terminal oturumunda başlatın:
+Then start Claude Code in the same terminal session:
 
 ```bash
 claude
 ```
 
-Proxy API key boş bırakıldıysa `ANTHROPIC_AUTH_TOKEN` gerekli değildir; yine de Claude Code tarafında boş olmayan yerel bir değer vermek istemci davranışını daha öngörülebilir kılar.
+If the proxy API key is empty `ANTHROPIC_AUTH_TOKEN` is not required; however providing a non-empty local value on the Claude Code side makes client behavior more predictable.
 
-## Release binary indirme
+## Downloading release binaries
 
-Kaynak kod `ferdiunal/freebuff-go` deposunda tutulur. `v*` tag'i push edildiğinde bu kaynak depodaki GitHub Actions workflow'u binary arşivlerini üretir ve `ferdiunal/freebuff-proxy` GitHub Releases altında yayınlar.
+Pre-built binaries for Linux, macOS, and Windows are published on the [GitHub Releases](https://github.com/ferdiunal/freebuff-proxy/releases) page.
 
-Örnek indirme:
+Example download:
 
 ```bash
 gh release download v0.1.0 \
@@ -343,23 +327,23 @@ tar -xzf dist/freebuff-proxy-darwin-arm64.tar.gz -C dist
 ./dist/freebuff-proxy-darwin-arm64 serve
 ```
 
-Release asset'leri yalnızca derlenmiş `freebuff-proxy` binary'sini içerir; credential dosyaları release paketlerine dahil edilmez.
+Release assets contain only the compiled `freebuff-proxy` binary; credential files are never included.
 
-## Docker kullanımı
+## Docker
 
-İmaj oluşturma:
+Build the image:
 
 ```bash
 docker build -t freebuff-proxy:local .
 ```
 
-veya:
+Or via Makefile:
 
 ```bash
 make docker
 ```
 
-Container çalıştırma örneği:
+Run:
 
 ```bash
 docker run --rm \
@@ -370,29 +354,33 @@ docker run --rm \
   freebuff-proxy:local serve
 ```
 
-Credential dosyasını container içinde üretmek isterseniz ilgili volume yazılabilir olmalıdır. Üretim kullanımında credential dosyasını salt okunur mount etmek tercih edilir.
+If you need to generate the credential file inside the container, mount the volume as read-write. In production, prefer mounting the credential file read-only.
 
-## Release otomasyonu
+## Release automation
 
-`freebuff-go` deposunda `FREEBUFF_PROXY_RELEASE_TOKEN` adlı repository secret tanımlı olmalıdır. Bu token yalnızca `ferdiunal/freebuff-proxy` deposunda release oluşturma ve asset yükleme yetkisi için kullanılmalıdır.
+Pushing a `v*` tag triggers the GitHub Actions release workflow (`.github/workflows/release-proxy.yml`). The workflow runs `go test` and `go vet`, then builds binaries for:
 
-Yeni sürüm yayınlamak için kaynak repoda tag push edilir:
+- `linux-amd64`
+- `linux-arm64`
+- `darwin-amd64`
+- `darwin-arm64`
+- `windows-amd64`
+
+Each binary is packaged as `.tar.gz` and published as a GitHub Release asset using the default `GITHUB_TOKEN`. No custom secrets are required.
+
+Manual trigger:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+gh workflow run release-proxy.yml -f tag=v0.1.0
 ```
 
-Workflow ilgili `v*` tag'ini `ferdiunal/freebuff-go` deposundan checkout eder, test/vet çalıştırır ve binary arşivlerini dağıtım reposundaki aynı tag release'ine yükler.
+## Security notes
 
-## Güvenlik notları
-
-- `credentials.json` gizli tutulmalıdır; bu dosya Freebuff oturum token'ı değerini içerir.
-- `credentials.json` repo kökünde tutulmamalı ve git'e commit edilmemelidir; varsayılan güvenli yol `$HOME/.config/manicode/credentials.json` değeridir.
-- `credentials.json` yanlışlıkla public repository'ye pushlandıysa token rotate/revoke edilmeli ve dosya git history'den de temizlenmelidir.
-- Credential dosyası `0600` izinleriyle saklanmalıdır. Uygulama kendi yazdığı dosyada bu izni uygular; dışarıdan mount edilen dosyalarda izni ayrıca kontrol edin.
-- oturum token'ı terminale, loglara, hata raporlarına veya CI çıktılarına yazdırılmamalıdır.
-- GitHub Actions release workflow'u Freebuff credential dosyası veya upstream token gerektirmez; CI'da yalnız `FREEBUFF_PROXY_RELEASE_TOKEN` dağıtım reposuna release yazmak için kullanılmalıdır.
-- Dış ağa açılan kurulumlarda `FREEBUFF_PROXY_API_KEY` kullanın ve istemcilerden `Authorization: Bearer <proxy-api-key>` göndermesini isteyin.
-- Proxy API key, upstream Freebuff token yerine geçmez; yalnızca yerel proxy yüzeyini korur.
-- Container çalıştırırken credential volume'unu mümkünse salt okunur bağlayın ve sadece gerekli kullanıcıya erişim verin.
+- Keep `credentials.json` secret; it contains your Freebuff session token.
+- Do not store `credentials.json` in the repo root or commit it to git. The safe default path is `$HOME/.config/manicode/credentials.json`.
+- If the credential file is accidentally pushed to a public repository, rotate/revoke the token and scrub it from git history.
+- The credential file should be stored with `0600` permissions. The application applies this permission on files it creates; verify permissions on externally mounted files.
+- Session tokens must not be printed to terminals, logs, error reports, or CI output.
+- In externally exposed deployments, set `FREEBUFF_PROXY_API_KEY` and require clients to send `Authorization: Bearer <value>`.
+- The proxy API key does not replace the upstream Freebuff token; it only protects the local proxy surface.
+- When running in containers, mount the credential volume read-only if possible and restrict access to the necessary user only.
